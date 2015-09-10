@@ -5,6 +5,18 @@ import os
 import sys
 import subprocess
 
+
+def dict_factory(cursor, row):
+  d = {}
+  for idx, col in enumerate(cursor.description):
+    d[col[0]] = row[idx]
+  return d
+
+def connect_to_database():
+  conn = sqlite3.connect('tasks.db')
+  conn.row_factory = dict_factory
+  return conn
+
 def delete_db():
 
   subprocess.call(['rm','tasks.db'])
