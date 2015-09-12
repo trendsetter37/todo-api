@@ -44,6 +44,42 @@ def create_task():
   db.close()
   return jsonify({'status': 'Task Added'}), 201
 
+@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
+def update_task(task_id):
+  db = get_db()
+  # find requested task
+  sql = ''' SELECT * FROM tasks WHERE id=(?) '''
+  cur = db.cursor()
+  rows = cur.execute(sql, (task_id,)).fetchall()[0]
+  row_id = rows['id'] 
+  json = request.json
+  
+  # check data validity
+  if len(rows) == 0:
+    abort(404)
+  if not request.json:
+    print 'not a json'
+    abort(400)
+  if 'title' in request.json and type(request.json['title']) is not unicode:
+    print 'Title was not unicode'
+    abort(400)
+  if 'description' in request.json and type(equest.json['description']) != unicode:
+    print 'Description wasn\'t in unicode'
+    abort(400)
+  if 'done' in request.json and type(request.json['done']) is not bool:
+    print 'done was not a boolean'
+    abort(400)
+  
+  # Update database entry
+  for key, val in json.items():
+    cur.execute('''UPDATE tasks SET ''' + key +'''=(?) WHERE id=(?)''', (val, row_id))
+  db.commit()
+  return jsonify({'status':'Complete'}), 201
+
+@app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
+def delete_task(task_id):
+	pass
+
 ################
 #Error Handlers#
 ################
