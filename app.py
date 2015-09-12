@@ -3,7 +3,7 @@ from db_tools import connect_to_database
 
 app = Flask(__name__)
 DATABASE = 'tasks.db'
-
+_errors = {}
 def get_db():
   db = getattr(g, '_database', None)
   if db is None:
@@ -34,7 +34,12 @@ def get_task(task_id):
 @app.route('/todo/api/v1.0/tasks', methods=['POST'])
 def create_task():
   ''' receiving json from client '''
-  if not request.json or not 'title' in request.json:
+  global _errors
+  if not request.json:
+    _errors['not_json'] = True
+    abort(400)
+  if not 'title' in request.json:
+    _errors['missing_title'] = True
     abort(400)
   db = get_db()
   sql = ''' INSERT INTO tasks (title, description, done) VALUES (?,?,?) '''
@@ -46,6 +51,7 @@ def create_task():
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
 def update_task(task_id):
+  global _errors
   db = get_db()
   # find requested task
   sql = ''' SELECT * FROM tasks WHERE id=(?) '''
@@ -58,16 +64,16 @@ def update_task(task_id):
   if len(rows) == 0:
     abort(404)
   if not request.json:
-    print 'not a json'
+    _errors['not_json'] = True
     abort(400)
   if 'title' in request.json and type(request.json['title']) is not unicode:
-    print 'Title was not unicode'
+    _errors['title_unicode_issue'] = True
     abort(400)
   if 'description' in request.json and type(equest.json['description']) != unicode:
-    print 'Description wasn\'t in unicode'
+    _errors['description_unicode_issue'] = True
     abort(400)
   if 'done' in request.json and type(request.json['done']) is not bool:
-    print 'done was not a boolean'
+    _errors['done_field_issue'] = True
     abort(400)
   
   # Update database entry
@@ -78,18 +84,49 @@ def update_task(task_id):
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
 def delete_task(task_id):
-	pass
+  db = get_db()
+  cur = db.cursor()
+  sql = '''SELECT * FROM tasks WHERE id=(?)'''
+  row = cur.execute(sql, (task_id,)).fetchall()[0]
+
+  if len(row) == 0:
+    abort(404)
+  sql = '''DELETE FROM tasks WHERE id=(?)'''
+  cur.execute(sql,(task_id,))
+  db.commit()
+  return jsonify({'status':'Deletion complete'}), 205
+
 
 ################
 #Error Handlers#
 ################
 @app.errorhandler(404)
 def not_found(error):
+  print 'Error: {}'.format(error)
   return make_response(jsonify({'error':'Task Not Found'}), 404)
 
 @app.errorhandler(400)
 def malformed(error):
-  return make_response(jsonify({'error':'Malformed json object'}), 400)
+  global _errors
+  errors = []
+  if 'not_json' in _errors and _errors['not_json']:
+    errors.append(u'json object was not sent by client')
+    _errors['not_json'] = False
+  if 'missing_title' in _errors and _errors['missing_title']:
+    errors.append(u'json task did not have a title')
+    _errors['missing_title'] = False
+  if 'title_unicode_issue' in _errors and _errors['title_unicode_issue']:
+    errors.append(u'title was not unicode')
+    _errors['title_unicode_issue'] = False
+  if 'description_unicode_issue' in _errors and _errors['description_unicode_issue']:
+    errors.append(u'description was not unicode')
+    _errors['description_unicode_issue'] = False
+  if 'done_field_issue' in _errors and _errors['done_field_issue']:
+    errors.append(u'done field did not contain a boolean')
+    _errors['done_field_issue'] = False
+
+  return make_response(jsonify({'errors':errors}), 400)
+
 
 if __name__ == '__main__':
   app.run(debug=True)
