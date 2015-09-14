@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, abort, g, make_response, request
+from flask import Flask, jsonify, abort, g, make_response, request, url_for
 from db_tools import connect_to_database
 
 app = Flask(__name__)
@@ -16,12 +16,26 @@ def teardown_db(exception):
   if db is not None:
     db.close()
 
+def make_public_uri(task):
+    ''' Receives task as dictionary '''
+    new_task = {}
+    for field in task:
+        if field == 'id':
+            new_task['uri'] = url_for('get_task', task_id=task[field], _external=True)
+        else:
+            new_task[field] = task[field]
+    return new_task
+
+##########
+# Routes #
+##########
+
 @app.route('/todo/api/v1.0/tasks', methods=['GET'])
 def get_tasks():
   ''' get all of your tasks '''
-  db = get_db().cursor() 
+  db = get_db().cursor()
   rows = db.execute('''SELECT * FROM tasks''')
-  return jsonify({'tasks':rows.fetchall()})
+  return jsonify({'tasks': [make_public_uri(task) for task in rows.fetchall()]})
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
 def get_task(task_id):
@@ -29,7 +43,7 @@ def get_task(task_id):
   rows = db.execute('''SELECT * FROM tasks WHERE ID=(?)''',(task_id,)).fetchall()
   if len(rows) == 0:
 	abort(404)
-  return jsonify({'task':rows[0]})
+  return jsonify({'task':make_public_uri(rows[0])})
 
 @app.route('/todo/api/v1.0/tasks', methods=['POST'])
 def create_task():
@@ -57,9 +71,9 @@ def update_task(task_id):
   sql = ''' SELECT * FROM tasks WHERE id=(?) '''
   cur = db.cursor()
   rows = cur.execute(sql, (task_id,)).fetchall()[0]
-  row_id = rows['id'] 
+  row_id = rows['id']
   json = request.json
-  
+
   # check data validity
   if len(rows) == 0:
     abort(404)
@@ -75,7 +89,7 @@ def update_task(task_id):
   if 'done' in request.json and type(request.json['done']) is not bool:
     _errors['done_field_issue'] = True
     abort(400)
-  
+
   # Update database entry
   for key, val in json.items():
     cur.execute('''UPDATE tasks SET ''' + key +'''=(?) WHERE id=(?)''', (val, row_id))
@@ -130,4 +144,3 @@ def malformed(error):
 
 if __name__ == '__main__':
   app.run(debug=True)
-  
