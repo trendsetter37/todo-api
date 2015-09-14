@@ -6,6 +6,19 @@ app = Flask(__name__)
 DATABASE = 'tasks.db'
 auth = HTTPBasicAuth()
 _errors = {}
+
+#############
+# Utilities #
+#############
+
+@auth.get_password
+def get_password(username):
+  ''' callback function the extension will use to get a password
+      This will eventually use a database '''
+  if username == 'javis':
+    return 'testpassword'
+  return None
+
 def get_db():
   db = getattr(g, '_database', None)
   if db is None:
@@ -33,6 +46,7 @@ def make_public_uri(task):
 ##########
 
 @app.route('/todo/api/v1.0/tasks', methods=['GET'])
+@auth.login_required
 def get_tasks():
   ''' get all of your tasks '''
   db = get_db().cursor()
@@ -40,6 +54,7 @@ def get_tasks():
   return jsonify({'tasks': [make_public_uri(task) for task in rows.fetchall()]})
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['GET'])
+@auth.login_required
 def get_task(task_id):
   db = get_db().cursor()
   rows = db.execute('''SELECT * FROM tasks WHERE ID=(?)''',(task_id,)).fetchall()
@@ -48,6 +63,7 @@ def get_task(task_id):
   return jsonify({'task':make_public_uri(rows[0])})
 
 @app.route('/todo/api/v1.0/tasks', methods=['POST'])
+@auth.login_required
 def create_task():
   ''' receiving json from client '''
   global _errors
@@ -66,6 +82,7 @@ def create_task():
   return jsonify({'status': 'Task Added'}), 201
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['PUT'])
+@auth.login_required
 def update_task(task_id):
   global _errors
   db = get_db()
@@ -99,6 +116,7 @@ def update_task(task_id):
   return jsonify({'status':'Complete'}), 201
 
 @app.route('/todo/api/v1.0/tasks/<int:task_id>', methods=['DELETE'])
+@auth.login_required
 def delete_task(task_id):
   db = get_db()
   cur = db.cursor()
@@ -113,9 +131,10 @@ def delete_task(task_id):
   return jsonify({'status':'Deletion complete'}), 205
 
 
-################
-#Error Handlers#
-################
+##################
+# Error Handlers #
+##################
+
 @app.errorhandler(404)
 def not_found(error):
   print 'Error: {}'.format(error)
@@ -142,6 +161,10 @@ def malformed(error):
     _errors['done_field_issue'] = False
 
   return make_response(jsonify({'errors':errors}), 400)
+
+@auth.error_handler
+def unauthorized():
+  return make_response(jsonify({'error':'Unauthorized Access'}), 401)
 
 
 if __name__ == '__main__':
