@@ -1,8 +1,10 @@
 from flask import Flask, jsonify, abort, g, make_response, request, url_for
+from flask.ext.httpauth import HTTPBasicAuth
 from db_tools import connect_to_database
 
 app = Flask(__name__)
 DATABASE = 'tasks.db'
+auth = HTTPBasicAuth()
 _errors = {}
 def get_db():
   db = getattr(g, '_database', None)
